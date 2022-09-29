@@ -744,142 +744,7 @@ nor discouraged.</p>
 <p>Use lambda expressions where appropriate. Prefer explicit captures
 when the lambda will escape the current scope.</p>
 
-<p class="definition"></p>
-<p> Lambda expressions are a concise way of creating anonymous
-function objects. They're often useful when passing
-functions as arguments. For example:</p>
-
-<pre>std::sort(v.begin(), v.end(), [](int x, int y) {
-  return Weight(x) &lt; Weight(y);
-});
-</pre>
-
-<p> They further allow capturing variables from the enclosing scope either
-explicitly by name, or implicitly using a default capture. Explicit captures
-require each variable to be listed, as
-either a value or reference capture:</p>
-
-<pre>int weight = 3;
-int sum = 0;
-// Captures `weight` by value and `sum` by reference.
-std::for_each(v.begin(), v.end(), [weight, &amp;sum](int x) {
-  sum += weight * x;
-});
-</pre>
-
-
-<p>Default captures implicitly capture any variable referenced in the
-lambda body, including <code>this</code> if any members are used:</p>
-
-<pre>const std::vector&lt;int&gt; lookup_table = ...;
-std::vector&lt;int&gt; indices = ...;
-// Captures `lookup_table` by reference, sorts `indices` by the value
-// of the associated element in `lookup_table`.
-std::sort(indices.begin(), indices.end(), [&amp;](int a, int b) {
-  return lookup_table[a] &lt; lookup_table[b];
-});
-</pre>
-
-<p>A variable capture can also have an explicit initializer, which can
-  be used for capturing move-only variables by value, or for other situations
-  not handled by ordinary reference or value captures:</p>
-  <pre>std::unique_ptr&lt;Foo&gt; foo = ...;
-[foo = std::move(foo)] () {
-  ...
-}</pre>
-<p>Such captures (often called "init captures" or "generalized lambda captures")
-  need not actually "capture" anything from the enclosing scope, or even have
-  a name from the enclosing scope; this syntax is a fully general way to define
-  members of a lambda object:</p>
-  <pre class="neutralcode">[foo = std::vector&lt;int&gt;({1, 2, 3})] () {
-  ...
-}</pre>
-<p>The type of a capture with an initializer is deduced using the same rules
-  as <code>auto</code>.</p>
-
-<p class="pros"></p>
-<ul>
-  <li>Lambdas are much more concise than other ways of
-   defining function objects to be passed to STL
-   algorithms, which can be a readability
-   improvement.</li>
-
-  <li>Appropriate use of default captures can remove
-    redundancy and highlight important exceptions from
-    the default.</li>
-
-   <li>Lambdas, <code>std::function</code>, and
-   <code>std::bind</code> can be used in combination as a
-   general purpose callback mechanism; they make it easy
-   to write functions that take bound functions as
-   arguments.</li>
-</ul>
-
-<p class="cons"></p>
-<ul>
-  <li>Variable capture in lambdas can be a source of dangling-pointer
-  bugs, particularly if a lambda escapes the current scope.</li>
-
-  <li>Default captures by value can be misleading because they do not prevent
-  dangling-pointer bugs. Capturing a pointer by value doesn't cause a deep
-  copy, so it often has the same lifetime issues as capture by reference.
-  This is especially confusing when capturing <code>this</code> by value,
-  since the use of <code>this</code> is often implicit.</li>
-
-  <li>Captures actually declare new variables (whether or not the captures have
-    initializers), but they look nothing like any other variable declaration
-    syntax in C++. In particular, there's no place for the variable's type,
-    or even an <code>auto</code> placeholder (although init captures can
-    indicate it indirectly, e.g., with a cast). This can make it difficult to
-    even recognize them as declarations.</li>
-
-  <li>Init captures inherently rely on <a href="#Type_deduction">type
-      deduction</a>, and suffer from many of the same drawbacks as
-    <code>auto</code>, with the additional problem that the syntax doesn't
-    even cue the reader that deduction is taking place.</li>
-
-  <li>It's possible for use of lambdas to get out of
-  hand; very long nested anonymous functions can make
-  code harder to understand.</li>
-
-</ul>
-
-<p class="decision"></p>
-<ul>
-<li>Use lambda expressions where appropriate, with formatting as
-described <a href="#Formatting_Lambda_Expressions">below</a>.</li>
-<li>Prefer explicit captures if the lambda may escape the current scope.
-For example, instead of:
-<pre class="badcode">{
-  Foo foo;
-  ...
-  executor-&gt;Schedule([&amp;] { Frobnicate(foo); })
-  ...
-}
-// BAD! The fact that the lambda makes use of a reference to `foo` and
-// possibly `this` (if `Frobnicate` is a member function) may not be
-// apparent on a cursory inspection. If the lambda is invoked after
-// the function returns, that would be bad, because both `foo`
-// and the enclosing object could have been destroyed.
-</pre>
-prefer to write:
-<pre>{
-  Foo foo;
-  ...
-  executor-&gt;Schedule([&amp;foo] { Frobnicate(foo); })
-  ...
-}
-// BETTER - The compile will fail if `Frobnicate` is a member
-// function, and it's clearer that `foo` is dangerously captured by
-// reference.
-</pre>
-</li>
-<li>See the section on <a href="#Type_deduction">type deduction</a>
-  for guidance on specifying the parameter and return types.</li>
-
-</ul>
-
-<h3 id="Other_Features"><a id="C++11">Other C++ Features</a></h3>
+<h3 id="Other_Features"><a id="C++11">Other FeatureScript Features</a></h3>
 
 <p>As with <a href="#Boost">Boost</a>, some modern C++
 extensions encourage coding practices that hamper
@@ -892,7 +757,7 @@ and conversion costs.</p>
 
 <p class="decision"></p>
 <p>In addition to what's described in the rest of the style
-guide, the following C++ features may not be used:</p>
+guide, the following FeatureScript features may not be used:</p>
 
 <ul>
   <li>Compile-time rational numbers
@@ -900,12 +765,7 @@ guide, the following C++ features may not be used:</p>
   it's tied to a more template-heavy interface
   style.</li>
 
-  <li>The <code>&lt;cfenv&gt;</code> and
-  <code>&lt;fenv.h&gt;</code> headers, because many
-  compilers do not support those features reliably.</li>
-
   <li>The <code>&lt;filesystem&gt;</code> header, which
-
   does not have sufficient support for testing, and suffers
   from inherent security vulnerabilities.</li>
 </ul>
@@ -1698,25 +1558,16 @@ interacts with the Windows API, which uses
 
 <h3 id="Function_Declarations_and_Definitions">Function Declarations and Definitions</h3>
 
-<p>Return type on the same line as function name, parameters
-on the same line if they fit. Wrap parameter lists which do
-not fit on a single line as you would wrap arguments in a
+<p>Always type function arguments and return types. Function argument
+  types should only be ommitted if the argument is allowed to be <code>undefined</code>.
+  The return type should only be ommitted if the function does not have a return value.
+Wrap parameter lists which do not fit on a single line as you would wrap arguments in a
 <a href="#Function_Calls">function call</a>.</p>
 
 <p>Functions look like this:</p>
-
-
-<pre>ReturnType ClassName::FunctionName(Type par_name1, Type par_name2) {
-  DoSomething();
-  ...
-}
-</pre>
-
-<p>If you have too much text to fit on one line:</p>
-
-<pre>ReturnType ClassName::ReallyLongFunctionName(Type par_name1, Type par_name2,
-                                             Type par_name3) {
-  DoSomething();
+<pre>functionName(parameterName1 is Type, parameterName2 is OtherType) returns SomeType
+{
+  doSomething();
   ...
 }
 </pre>
@@ -1737,9 +1588,6 @@ not fit on a single line as you would wrap arguments in a
 <ul>
   <li>Choose good parameter names.</li>
 
-  <li>A parameter name may be omitted only if the parameter is not used in the
-  function's definition.</li>
-
   <li>If you cannot fit the return type and the function
   name on a single line, break between them.</li>
 
@@ -1755,89 +1603,23 @@ not fit on a single line as you would wrap arguments in a
   <li>There is never a space between the parentheses and
   the parameters.</li>
 
-  <li>The open curly brace is always on the end of the last line of the function
-  declaration, not the start of the next line.</li>
+  <li>The open curly brace is always on the start of the 
+    next line of the declaration.</li>
 
-  <li>The close curly brace is either on the last line by
-  itself or on the same line as the open curly brace.</li>
+  <li>The close curly brace is on the last line by itself.</li>
 
   <li>There should be a space between the close
   parenthesis and the open curly brace.</li>
 
   <li>All parameters should be aligned if possible.</li>
-
-  <li>Default indentation is 2 spaces.</li>
-
-  <li>Wrapped parameters have a 4 space indent.</li>
 </ul>
-
-<p>Unused parameters that are obvious from context may be omitted:</p>
-
-<pre>class Foo {
- public:
-  Foo(const Foo&amp;) = delete;
-  Foo&amp; operator=(const Foo&amp;) = delete;
-};
-</pre>
-
-<p>Unused parameters that might not be obvious should comment out the variable
-name in the function definition:</p>
-
-<pre>class Shape {
- public:
-  virtual void Rotate(double radians) = 0;
-};
-
-class Circle : public Shape {
- public:
-  void Rotate(double radians) override;
-};
-
-void Circle::Rotate(double /*radians*/) {}
-</pre>
-
-<pre class="badcode">// Bad - if someone wants to implement later, it's not clear what the
-// variable means.
-void Circle::Rotate(double) {}
-</pre>
-
-<p>Attributes, and macros that expand to attributes, appear at the very
-beginning of the function declaration or definition, before the
-return type:</p>
-<pre>  ABSL_ATTRIBUTE_NOINLINE void ExpensiveFunction();
-  [[nodiscard]] bool IsOk();
-</pre>
-
-<h3 id="Formatting_Lambda_Expressions">Lambda Expressions</h3>
-
-<p>Format parameters and bodies as for any other function, and capture
-lists like other comma-separated lists.</p>
-
-<p>For by-reference captures, do not leave a space between the
-ampersand (&amp;) and the variable name.</p>
-<pre>int x = 0;
-auto x_plus_n = [&amp;x](int n) -&gt; int { return x + n; }
-</pre>
-<p>Short lambdas may be written inline as function arguments.</p>
-<pre>std::set&lt;int&gt; to_remove = {7, 8, 9};
-std::vector&lt;int&gt; digits = {3, 9, 1, 8, 4, 7, 1};
-digits.erase(std::remove_if(digits.begin(), digits.end(), [&amp;to_remove](int i) {
-               return to_remove.find(i) != to_remove.end();
-             }),
-             digits.end());
-</pre>
 
 <h3 id="Floating_Literals">Floating-point Literals</h3>
 
-<p>Floating-point literals should always have a radix point, with digits on both
+<p>Floating-point literals should always have be followed by a decimal, with digits on both
 sides, even if they use exponential notation. Readability is improved if all
 floating-point literals take this familiar form, as this helps ensure that they
-are not mistaken for integer literals, and that the
-<code>E</code>/<code>e</code> of the exponential notation is not mistaken for a
-hexadecimal digit. It is fine to initialize a floating-point variable with an
-integer literal (assuming the variable type can exactly represent that integer),
-but note that a number in exponential notation is never an integer literal.
-</p>
+are not mistaken for integer literals.</p>
 
 <pre class="badcode">float f = 1.f;
 long double ld = -.5L;
@@ -1861,7 +1643,7 @@ minimum number of lines, including placing multiple arguments
 on each line where appropriate.</p>
 
 <p>Function calls have the following format:</p>
-<pre>bool result = DoSomething(argument1, argument2, argument3);
+<pre>var result = doSomething(argument1, argument2, argument3);
 </pre>
 
 <p>If the arguments do not all fit on one line, they
@@ -2079,7 +1861,6 @@ for (int i = 0; i &lt; kSomeNumber; ++i) {
 }
 </pre>
 
-
 <p>Empty loop bodies should use either an empty pair of braces or
 <code>continue</code> with no braces, rather than a single semicolon.</p>
 
@@ -2175,11 +1956,7 @@ though wrapping all operators at the beginning of the
 line is also allowed. Feel free to insert extra
 parentheses judiciously because they can be very helpful
 in increasing readability when used
-appropriately, but be careful about overuse. Also note that you
-should always use the punctuation operators, such as
-<code>&amp;&amp;</code> and <code>~</code>, rather than
-the word operators, such as <code>and</code> and
-<code>compl</code>.</p>
+appropriately, but be careful about overuse.</p>
 
 <h3 id="Return_Values">Return Values</h3>
 
@@ -2189,16 +1966,17 @@ expression with parentheses.</p>
 <p>Use parentheses in <code>return expr;</code> only
 where you would use them in <code>x = expr;</code>.</p>
 
-<pre>return result;                  // No parentheses in the simple case.
+<pre>
+return result;                  // No parentheses in the simple case.
 // Parentheses OK to make a complex expression more readable.
 return (some_long_condition &amp;&amp;
         another_condition);
 </pre>
 
-<pre class="badcode">return (value);                // You wouldn't write var = (value);
+<pre class="badcode">
+return (value);                // You wouldn't write var = (value);
 return(result);                // return is not a function!
 </pre>
-
 
 <h3 id="Variable_and_Array_Initialization">Variable and Array Initialization</h3>
 
@@ -2212,27 +1990,6 @@ int x{3};
 std::string name = "Some Name";
 std::string name("Some Name");
 std::string name{"Some Name"};
-</pre>
-
-<p>Be careful when using a braced initialization list <code>{...}</code>
-on a type with an <code>std::initializer_list</code> constructor.
-A nonempty <i>braced-init-list</i> prefers the
-<code>std::initializer_list</code> constructor whenever
-possible. Note that empty braces <code>{}</code> are special, and
-will call a default constructor if available. To force the
-non-<code>std::initializer_list</code> constructor, use parentheses
-instead of braces.</p>
-
-<pre>std::vector&lt;int&gt; v(100, 1);  // A vector containing 100 items: All 1s.
-std::vector&lt;int&gt; v{100, 1};  // A vector containing 2 items: 100 and 1.
-</pre>
-
-<p>Also, the brace form prevents narrowing of integral
-types. This can prevent some types of programming
-errors.</p>
-
-<pre>int pi(3.14);  // OK -- pi == 3.
-int pi{3.14};  // Compile error: narrowing conversion.
 </pre>
 
 <h3 id="Horizontal_Whitespace">Horizontal Whitespace</h3>
