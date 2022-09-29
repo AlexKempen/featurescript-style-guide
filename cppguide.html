@@ -669,20 +669,10 @@ openFileOrDie()
 
 <h3 id="Enumerator_Names">Enumerator Names</h3>
 
-<p>Enumerators (for both scoped and unscoped enums) should be named like
-<a href="#Constant_Names">constants</a>, not like
-<a href="#Macro_Names">macros</a>. That is, use <code>kEnumName</code> not
-<code>ENUM_NAME</code>.</p>
+<p>Enumerators should be named like
+<a href="#Constant_Names">constants</a> (e.g. <code>ENUM_NAME</code>).</p>
 
-
-
-<pre>enum class UrlTableError {
-  kOk = 0,
-  kOutOfMemory,
-  kMalformedInput,
-};
-</pre>
-<pre class="badcode">enum class AlternateUrlTableError {
+<pre>enum AlternateUrlTableError {
   OK = 0,
   OUT_OF_MEMORY = 1,
   MALFORMED_INPUT = 2,
