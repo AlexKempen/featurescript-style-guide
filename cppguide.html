@@ -946,13 +946,13 @@ characters long.</p>
   <li>The close curly brace is on the last line by itself.</li>
 </ul>
 
-<h3 id="Decimal_Literals">Decimal Literals</h3>
+<h3 id="Literals">Literals</h3>
 
-<p>Always include a leading 0 when writing decimal literals less than 1 in order to enhance readability.</p>
+<p>Decimals in literals should always be surrounded by digits.</p>
 
-<pre class="badcode">var myValue = someValue + otherValue * .4;</pre>
+<pre class="badcode">var myValue = .4;</pre>
 
-<pre class="goodcode">var myValue = someValue + otherValue * 0.4;</pre>
+<pre class="goodcode">var myValue = 0.4;</pre>
 
 <h3 id="Function_Calls">Function Calls</h3>
 
@@ -1097,65 +1097,6 @@ if (condition1 &amp;&amp;
   DoSomething();
 </pre>
 
-<h3 id="Pointer_and_Reference_Expressions">Pointer and Reference Expressions</h3>
-
-<p>No spaces around period or arrow. Pointer operators do not
-have trailing spaces.</p>
-
-<p>The following are examples of correctly-formatted
-pointer and reference expressions:</p>
-
-<pre>x = *p;
-p = &amp;x;
-x = r.y;
-x = r-&gt;y;
-</pre>
-
-<p>Note that:</p>
-
-<ul>
-  <li>There are no spaces around the period or arrow when
-  accessing a member.</li>
-
-   <li>Pointer operators have no space after the
-   <code>*</code> or <code>&amp;</code>.</li>
-</ul>
-
-<p>When referring to a pointer or reference (variable declarations or definitions, arguments,
-return types, template parameters, etc), you may place the space before or after the
-asterisk/ampersand. In the trailing-space style, the space is elided in some cases (template
-parameters, etc).</p>
-
-<pre>// These are fine, space preceding.
-char *c;
-const std::string &amp;str;
-int *GetPointer();
-std::vector&lt;char *&gt;
-
-// These are fine, space following (or elided).
-char* c;
-const std::string&amp; str;
-int* GetPointer();
-std::vector&lt;char*&gt;  // Note no space between '*' and '&gt;'
-</pre>
-
-<p>You should do this consistently within a single
-file.
-When modifying an existing file, use the style in
-that file.</p>
-
-It is allowed (if unusual) to declare multiple variables in the same
-declaration, but it is disallowed if any of those have pointer or
-reference decorations. Such declarations are easily misread.
-<pre>// Fine if helpful for readability.
-int x, y;
-</pre>
-<pre class="badcode">int x, *y;  // Disallowed - no &amp; or * in multiple declaration
-int* x, *y;  // Disallowed - no &amp; or * in multiple declaration; inconsistent spacing
-char * c;  // Bad - spaces on both sides of *
-const std::string &amp; str;  // Bad - spaces on both sides of &amp;
-</pre>
-
 <h3 id="Boolean_Expressions">Boolean Expressions</h3>
 
 <p>When you have a boolean expression that is longer than the
@@ -1186,19 +1127,16 @@ appropriately, but be careful about overuse.</p>
 <p>Do not needlessly surround the <code>return</code>
 expression with parentheses.</p>
 
-<p>Use parentheses in <code>return expr;</code> only
-where you would use them in <code>x = expr;</code>.</p>
-
 <pre>
-return result;                  // No parentheses in the simple case.
-// Parentheses OK to make a complex expression more readable.
-return (some_long_condition &amp;&amp;
-        another_condition);
+return result; // No parentheses in the simple case.
+// Parentheses okay to make a complex expression more readable.
+return (someCondition &amp;&amp;
+        anotherCondition);
 </pre>
 
 <pre class="badcode">
-return (value);                // You wouldn't write var = (value);
-return(result);                // return is not a function!
+return (value); // You wouldn't write var = (value);
+return(result); // return is not a function!
 </pre>
 
 <h3 id="Variable_and_Array_Initialization">Variable and Array Initialization</h3>
