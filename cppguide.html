@@ -145,194 +145,12 @@ for (int i = 0; i &lt; 1000000; ++i) {
 }
 </pre>
 
-<h3 id="Static_and_Global_Variables">Static and Global Variables</h3>
-
-<p>Objects with
-<a href="http://en.cppreference.com/w/cpp/language/storage_duration#Storage_duration">
-static storage duration</a> are forbidden unless they are
-<a href="http://en.cppreference.com/w/cpp/types/is_destructible">trivially
-destructible</a>. Informally this means that the destructor does not do
-anything, even taking member and base destructors into account. More formally it
-means that the type has no user-defined or virtual destructor and that all bases
-and non-static members are trivially destructible.
-Static function-local variables may use dynamic initialization.
-Use of dynamic initialization for static class member variables or variables at
-namespace scope is discouraged, but allowed in limited circumstances; see below
-for details.</p>
-
-<p>As a rule of thumb: a global variable satisfies these requirements if its
-declaration, considered in isolation, could be <code>constexpr</code>.</p>
-
-<p class="definition"></p>
-<p>Every object has a <dfn>storage duration</dfn>, which correlates with its
-lifetime. Objects with static storage duration live from the point of their
-initialization until the end of the program. Such objects appear as variables at
-namespace scope ("global variables"), as static data members of classes, or as
-function-local variables that are declared with the <code>static</code>
-specifier. Function-local static variables are initialized when control first
-passes through their declaration; all other objects with static storage duration
-are initialized as part of program start-up. All objects with static storage
-duration are destroyed at program exit (which happens before unjoined threads
-are terminated).</p>
-
-<p>Initialization may be <dfn>dynamic</dfn>, which means that something
-non-trivial happens during initialization. (For example, consider a constructor
-that allocates memory, or a variable that is initialized with the current
-process ID.) The other kind of initialization is <dfn>static</dfn>
-initialization. The two aren't quite opposites, though: static
-initialization <em>always</em> happens to objects with static storage duration
-(initializing the object either to a given constant or to a representation
-consisting of all bytes set to zero), whereas dynamic initialization happens
-after that, if required.</p>
-
-<p class="pros"></p>
-<p>Global and static variables are very useful for a large number of
-applications: named constants, auxiliary data structures internal to some
-translation unit, command-line flags, logging, registration mechanisms,
-background infrastructure, etc.</p>
-
-<p class="cons"></p>
-<p>Global and static variables that use dynamic initialization or have
-non-trivial destructors create complexity that can easily lead to hard-to-find
-bugs. Dynamic initialization is not ordered across translation units, and
-neither is destruction (except that destruction
-happens in reverse order of initialization). When one initialization refers to
-another variable with static storage duration, it is possible that this causes
-an object to be accessed before its lifetime has begun (or after its lifetime
-has ended). Moreover, when a program starts threads that are not joined at exit,
-those threads may attempt to access objects after their lifetime has ended if
-their destructor has already run.</p>
-
-<p class="decision"></p>
-<h4>Decision on destruction</h4>
-
-<p>When destructors are trivial, their execution is not subject to ordering at
-all (they are effectively not "run"); otherwise we are exposed to the risk of
-accessing objects after the end of their lifetime. Therefore, we only allow
-objects with static storage duration if they are trivially destructible.
-Fundamental types (like pointers and <code>int</code>) are trivially
-destructible, as are arrays of trivially destructible types. Note that
-variables marked with <code>constexpr</code> are trivially destructible.</p>
-<pre>const int kNum = 10;  // Allowed
-
-struct X { int n; };
-const X kX[] = {{1}, {2}, {3}};  // Allowed
-
-void foo() {
-  static const char* const kMessages[] = {"hello", "world"};  // Allowed
-}
-
-// Allowed: constexpr guarantees trivial destructor.
-constexpr std::array&lt;int, 3&gt; kArray = {1, 2, 3};</pre>
-<pre class="badcode">// bad: non-trivial destructor
-const std::string kFoo = "foo";
-
-// Bad for the same reason, even though kBar is a reference (the
-// rule also applies to lifetime-extended temporary objects).
-const std::string&amp; kBar = StrCat("a", "b", "c");
-
-void bar() {
-  // Bad: non-trivial destructor.
-  static std::map&lt;int, int&gt; kData = {{1, 0}, {2, 0}, {3, 0}};
-}</pre>
-
-<p>Note that references are not objects, and thus they are not subject to the
-constraints on destructibility. The constraint on dynamic initialization still
-applies, though. In particular, a function-local static reference of the form
-<code>static T&amp; t = *new T;</code> is allowed.</p>
-
-<h4>Decision on initialization</h4>
-
-<p>Initialization is a more complex topic. This is because we must not only
-consider whether class constructors execute, but we must also consider the
-evaluation of the initializer:</p>
-<pre class="neutralcode">int n = 5;    // Fine
-int m = f();  // ? (Depends on f)
-Foo x;        // ? (Depends on Foo::Foo)
-Bar y = g();  // ? (Depends on g and on Bar::Bar)
-</pre>
-
-<a id="Multiple_Inheritance"></a>
-<h3 id="Inheritance">Inheritance</h3>
-
-<p>Composition is often more appropriate than inheritance.
-When using inheritance, make it <code>public</code>.</p>
-
-<p class="definition"></p>
-<p> When a sub-class
-inherits from a base class, it includes the definitions
-of all the data and operations that the base class
-defines. "Interface inheritance" is inheritance from a
-pure abstract base class (one with no state or defined
-methods); all other inheritance is "implementation
-inheritance".</p>
-
-<p class="pros"></p>
-<p>Implementation inheritance reduces code size by re-using
-the base class code as it specializes an existing type.
-Because inheritance is a compile-time declaration, you
-and the compiler can understand the operation and detect
-errors. Interface inheritance can be used to
-programmatically enforce that a class expose a particular
-API. Again, the compiler can detect errors, in this case,
-when a class does not define a necessary method of the
-API.</p>
-
-<p class="cons"></p>
-<p>For implementation inheritance, because the code
-implementing a sub-class is spread between the base and
-the sub-class, it can be more difficult to understand an
-implementation. The sub-class cannot override functions
-that are not virtual, so the sub-class cannot change
-implementation.</p>
-
-<p>Multiple inheritance is especially problematic, because
-it often imposes a higher performance overhead (in fact,
-the performance drop from single inheritance to multiple
-inheritance can often be greater than the performance
-drop from ordinary to virtual dispatch), and because
-it risks leading to "diamond" inheritance patterns,
-which are prone to ambiguity, confusion, and outright bugs.</p>
-
-<p class="decision"></p>
-
-<p>All inheritance should be <code>public</code>. If you
-want to do private inheritance, you should be including
-an instance of the base class as a member instead. You may use
-<code>final</code> on classes when you don't intend to support using
-them as base classes.</p>
-
-<p>Do not overuse implementation inheritance. Composition
-is often more appropriate. Try to restrict use of
-inheritance to the "is-a" case: <code>Bar</code>
-subclasses <code>Foo</code> if it can reasonably be said
-that <code>Bar</code> "is a kind of"
-<code>Foo</code>.</p>
-
-<p>Limit the use of <code>protected</code> to those
-member functions that might need to be accessed from
-subclasses. Note that <a href="#Access_Control">data
-members should be private</a>.</p>
-
-<p>Explicitly annotate overrides of virtual functions or virtual
-destructors with exactly one of an <code>override</code> or (less
-frequently) <code>final</code> specifier. Do not
-use <code>virtual</code> when declaring an override.
-Rationale: A function or destructor marked
-<code>override</code> or <code>final</code> that is
-not an override of a base class virtual function will
-not compile, and this helps catch common errors. The
-specifiers serve as documentation; if no specifier is
-present, the reader has to check all ancestors of the
-class in question to determine if the function or
-destructor is virtual or not.</p>
-
-<p>Multiple inheritance is permitted, but multiple <em>implementation</em>
-inheritance is strongly discouraged.</p>
+<!-- <h3 id="Global_Variables">Global Variables</h3>
+<p>Global Variables should not generally be used.</p> -->
 
 <h3 id="Operator_Overloading">Operator Overloading</h3>
 
-<p>Overload operators judiciously. Do not use user-defined literals.</p>
+<p>Overload operators judiciously.</p>
 
 <p class="definition"></p>
 <p>C++ permits user code to
@@ -349,10 +167,8 @@ such as <code>operator bool()</code>.</p>
 intuitive by enabling user-defined types to behave the same
 as built-in types. Overloaded operators are the idiomatic names
 for certain operations (e.g., <code>==</code>, <code>&lt;</code>,
-<code>=</code>, and <code>&lt;&lt;</code>), and adhering to
-those conventions can make user-defined types more readable
-and enable them to interoperate with libraries that expect
-those names.</p>
+ and <code>=</code>), and adhering to
+those conventions can make user-defined types more readable.</p>
 
 <p>User-defined literals are a very concise notation for
 creating objects of user-defined types.</p>
@@ -374,10 +190,6 @@ creating objects of user-defined types.</p>
   thinking that expensive operations are cheap, built-in
   operations.</li>
 
-  <li>Finding the call sites for overloaded operators may
-  require a search tool that's aware of C++ syntax, rather
-  than e.g., grep.</li>
-
   <li>If you get the argument type of an overloaded operator
   wrong, you may get a different overload rather than a
   compiler error. For example, <code>foo &lt; bar</code>
@@ -391,28 +203,6 @@ creating objects of user-defined types.</p>
   <code>&amp;&amp;</code>, <code>||</code>, and <code>,</code>
   (comma) cannot match the evaluation-order semantics of the
   built-in operators.</li>
-
-  <li>Operators are often defined outside the class,
-  so there's a risk of different files introducing
-  different definitions of the same operator. If both
-  definitions are linked into the same binary, this results
-  in undefined behavior, which can manifest as subtle
-  run-time bugs.</li>
-
-  <li>User-defined literals (UDLs) allow the creation of new
-  syntactic forms that are unfamiliar even to experienced C++
-  programmers, such as <code>"Hello World"sv</code> as a
-  shorthand for <code>std::string_view("Hello World")</code>.
-  Existing notations are clearer, though less terse.</li>
-
-  <li>Because they can't be namespace-qualified, uses of UDLs also require
-  use of either using-directives (which <a href="#Namespaces">we ban</a>) or
-  using-declarations (which <a href="#Aliases">we ban in header files</a> except
-  when the imported names are part of the interface exposed by the header
-  file in question).  Given that header files would have to avoid UDL
-  suffixes, we prefer to avoid having conventions for literals differ
-  between header files and source files.
-  </li>
 </ul>
 
 <p class="decision"></p>
@@ -434,13 +224,6 @@ are defined consistently. For example, if you overload
 and make sure <code>&lt;</code> and <code>&gt;</code> never
 return true for the same arguments.</p>
 
-<p>Prefer to define non-modifying binary operators as
-non-member functions. If a binary operator is defined as a
-class member, implicit conversions will apply to the
-right-hand argument, but not the left-hand one. It will
-confuse your users if <code>a &lt; b</code> compiles but
-<code>b &lt; a</code> doesn't.</p>
-
 <p>Don't go out of your way to avoid defining operator
 overloads. For example, prefer to define <code>==</code>,
 <code>=</code>, and <code>&lt;&lt;</code>, rather than
@@ -458,30 +241,12 @@ use a custom comparator rather than overloading
 literals.  Do not use any such literals provided by others
 (including the standard library).</p>
 
-<p>Type conversion operators are covered in the section on
-<a href="#Implicit_Conversions">implicit conversions</a>.
-The <code>=</code> operator is covered in the section on
+<p>Overloading the <code>=</code> operator is covered in the section on
 <a href="#Copy_Constructors">copy constructors</a>. Overloading
 <code>&lt;&lt;</code> for use with streams is covered in the
 section on <a href="#Streams">streams</a>. See also the rules on
 <a href="#Function_Overloading">function overloading</a>, which
 apply to operator overloading as well.</p>
-
-<h3 id="Access_Control">Access Control</h3>
-
-<p>Make classes' data members <code>private</code>, unless they are
-<a href="#Constant_Names">constants</a>. This simplifies reasoning about invariants, at the cost
-of some easy boilerplate in the form of accessors (usually <code>const</code>) if necessary.</p>
-
-<p>For technical
-reasons, we allow data members of a test fixture class defined in a .cc file to
-be <code>protected</code> when using
-
-
-<a href="https://github.com/google/googletest">Google
-Test</a>.
-If a test fixture class is defined outside of the .cc file it is used in, for example in a .h file,
-make data members <code>private</code>.</p>
 
 <h3 id="Declaration_Order">Declaration Order</h3>
 
@@ -578,6 +343,11 @@ length. If a function exceeds about 40 lines, think about
 whether it can be broken up without harming the structure
 of the program.</p>
 
+<p>Pay particular attention to the length of the main function.
+  It is often tempting to write an entire feature in one go. 
+  Consider breaking functionality out into sub functions instead.
+</p>
+
 <p>Even if your long function works perfectly now,
 someone modifying it in a few months may add new
 behavior. This could result in bugs that are hard to
@@ -640,57 +410,8 @@ from the set is being called. If you can document all entries in the
 overload set with a single comment in the header, that is a good sign
 that it is a well-designed overload set.</p>
 
-<h3 id="Default_Arguments">Default Arguments</h3>
 
-<p>Default arguments are allowed on non-virtual functions
-when the default is guaranteed to always have the same
-value. Follow the same restrictions as for <a href="#Function_Overloading">function overloading</a>, and
-prefer overloaded functions if the readability gained with
-default arguments doesn't outweigh the downsides below.</p>
-
-<p class="pros"></p>
-<p>Often you have a function that uses default values, but
-occasionally you want to override the defaults. Default
-parameters allow an easy way to do this without having to
-define many functions for the rare exceptions. Compared
-to overloading the function, default arguments have a
-cleaner syntax, with less boilerplate and a clearer
-distinction between 'required' and 'optional'
-arguments.</p>
-
-<p class="cons"></p>
-<p>Defaulted arguments are another way to achieve the
-semantics of overloaded functions, so all the <a href="#Function_Overloading">reasons not to overload
-functions</a> apply.</p>
-
-<p>The defaults for arguments in a virtual function call are
-determined by the static type of the target object, and
-there's no guarantee that all overrides of a given function
-declare the same defaults.</p>
-
-<p>Default parameters are re-evaluated at each call site,
-which can bloat the generated code. Readers may also expect
-the default's value to be fixed at the declaration instead
-of varying at each call.</p>
-
-<p>Function pointers are confusing in the presence of
-default arguments, since the function signature often
-doesn't match the call signature. Adding
-function overloads avoids these problems.</p>
-
-<p class="decision"></p>
-<p>Default arguments are banned on virtual functions, where
-they don't work properly, and in cases where the specified
-default might not evaluate to the same value depending on
-when it was evaluated. (For example, don't write <code>void
-f(int n = counter++);</code>.)</p>
-
-<p>In some other cases, default arguments can improve the
-readability of their function declarations enough to
-overcome the downsides above, so they are allowed. When in
-doubt, use overloads.</p>
-
-<h2 id="Other_C++_Features">Other C++ Features</h2>
+<h2 id="Other_FeatureScript_Features">Other FeatureScript Features</h2>
 
 <h3 id="Use_of_const">Use of const</h3>
 
@@ -737,77 +458,45 @@ many other contexts as well. In particular:</p>
 <p>Using <code>const</code> on local variables is neither encouraged
 nor discouraged.</p>
 
+<h3 id="Switch_Statements"> Switch Statements</h3>
+
+<p>The FeatureScript switch statement is undocumented and should not be used.</p>
+
+<h3 id="Abort_Feature"> Use of abortFeature</h3>
+
+<p><code>abortFeature</code> should not be used because 
+uncaught errors which occur between a call to <code>startFeature</code>
+and a call to <code>abortFeature</code> crash the part studio.
+Instead, delete temporary entities using <code>opDeleteBodies</code></p>
+
+<p>If abortFeature is used, a try statement should always 
+encapsulate all code between the call to <code>startFeature</code> 
+and the subsequent call to <code>abortFeature</code>.</p>
+
+<pre class="badcode">const tempId = id + "temp";
+startFeature(context, tempId);
+// If abortFeature is used, always include a try statement
+var result;
+try 
+{
+    result = doSomethingTemporary(context, tempId, definition);
+}
+abortFeature(context, tempId);
+</pre>
+
+<pre>const tempId = id + "temp";
+const result = doSomethingTemporary(context, tempId, definition);
+if (!isQueryEmpty(context, qCreatedBy(tempId, EntityType.BODY)))
+{
+  opDeleteBodies(context, id + "cleanup", { "entities" : qCreatedBy(tempId, EntityType.BODY) })
+}
+</pre>
+
 <!-- <h3 id="Type_labels">Type Labels</h3> -->
 
-<h3 id="Lambda_expressions">Lambda Expressions</h3>
+<h3 id="Lambda_Expressions">Lambda Expressions</h3>
 
-<p>Use lambda expressions where appropriate. Prefer explicit captures
-when the lambda will escape the current scope.</p>
-
-<h3 id="Other_Features"><a id="C++11">Other FeatureScript Features</a></h3>
-
-<p>As with <a href="#Boost">Boost</a>, some modern C++
-extensions encourage coding practices that hamper
-readability—for example by removing
-checked redundancy (such as type names) that may be
-helpful to readers, or by encouraging template
-metaprogramming. Other extensions duplicate functionality
-available through existing mechanisms, which may lead to confusion
-and conversion costs.</p>
-
-<p class="decision"></p>
-<p>In addition to what's described in the rest of the style
-guide, the following FeatureScript features may not be used:</p>
-
-<ul>
-  <li>Compile-time rational numbers
-  (<code>&lt;ratio&gt;</code>), because of concerns that
-  it's tied to a more template-heavy interface
-  style.</li>
-
-  <li>The <code>&lt;filesystem&gt;</code> header, which
-  does not have sufficient support for testing, and suffers
-  from inherent security vulnerabilities.</li>
-</ul>
-
-<h3 id="Nonstandard_Extensions">Nonstandard Extensions</h3>
-
-<p>Nonstandard extensions to C++ may not be used unless otherwise specified.</p>
-
-<p class="definition"></p>
-<p>Compilers support various extensions that are not part of standard C++. Such
-  extensions include GCC's <code>__attribute__</code>, intrinsic functions such
-  as <code>__builtin_prefetch</code>, inline assembly, <code>__COUNTER__</code>,
-  <code>__PRETTY_FUNCTION__</code>, compound statement expressions (e.g.,
-  <code>foo = ({ int x; Bar(&amp;x); x })</code>, variable-length arrays and
-  <code>alloca()</code>, and the "<a href="https://en.wikipedia.org/wiki/Elvis_operator">Elvis Operator</a>"
-  <code>a?:b</code>.</p>
-
-<p class="pros"></p>
-  <ul>
-    <li>Nonstandard extensions may provide useful features that do not exist
-      in standard C++.</li>
-    <li>Important performance guidance to the compiler can only be specified
-      using extensions.</li>
-  </ul>
-
-<p class="cons"></p>
-  <ul>
-    <li>Nonstandard extensions do not work in all compilers. Use of nonstandard
-      extensions reduces portability of code.</li>
-    <li>Even if they are supported in all targeted compilers, the extensions
-      are often not well-specified, and there may be subtle behavior differences
-      between compilers.</li>
-    <li>Nonstandard extensions add to the language features that a reader must
-      know to understand the code.</li>
-  </ul>
-
-<p class="decision"></p>
-<p>Do not use nonstandard extensions. You may use portability wrappers that
-  are implemented using nonstandard extensions, so long as those wrappers
-
-  are provided by a designated project-wide
-  portability header.</p>
+<p>Use lambda expressions where appropriate.</p>
 
 <h2 id="Naming">Naming</h2>
 
@@ -819,8 +508,7 @@ declaration of that entity. The pattern-matching engine in our
 brains relies a great deal on these naming rules.
 </p>
 
-<p>Naming rules are pretty arbitrary, but
- we feel that
+<p>Naming rules are pretty arbitrary, but we feel that
 consistency is more important than individual preferences in this
 area, so regardless of whether you find them sensible or not,
 the rules are the rules.</p>
@@ -971,64 +659,13 @@ variables, otherwise the usual variable naming rules apply.</p>
 
 <h3 id="Function_Names">Function Names</h3>
 
-<p>Regular functions have mixed case; accessors and mutators may be named
-like variables.</p>
-
-<p>Ordinarily, functions should start with a capital letter and have a
+<p>Functions should start with a lowercase letter and have a
 capital letter for each new word.</p>
 
-<pre>AddTableEntry()
-DeleteUrl()
-OpenFileOrDie()
+<pre>addTableEntry()
+deleteUrl()
+openFileOrDie()
 </pre>
-
-<p>(The same naming rule applies to class- and namespace-scope
-constants that are exposed as part of an API and that are intended to look
-like functions, because the fact that they're objects rather than functions
-is an unimportant implementation detail.)</p>
-
-<p>Accessors and mutators (get and set functions) may be named like
-variables. These often correspond to actual member variables, but this is
-not required. For example, <code>int count()</code> and <code>void
-set_count(int count)</code>.</p>
-
-<h3 id="Namespace_Names">Namespace Names</h3>
-
-Namespace names are all lower-case, with words separated by underscores.
-Top-level namespace names are based on the project name
-. Avoid collisions
-between nested namespaces and well-known top-level namespaces.
-
-<p>The name of a top-level namespace should usually be the
-name of the project or team whose code is contained in that
-namespace. The code in that namespace should usually be in
-a directory whose basename matches the namespace name (or in
-subdirectories thereof).</p>
-
-
-
-<p>Keep in mind that the <a href="#General_Naming_Rules">rule
-against abbreviated names</a> applies to namespaces just as much
-as variable names. Code inside the namespace seldom needs to
-mention the namespace name, so there's usually no particular need
-for abbreviation anyway.</p>
-
-<p>Avoid nested namespaces that match well-known top-level
-namespaces. Collisions between namespace names can lead to surprising
-build breaks because of name lookup rules. In particular, do not
-create any nested <code>std</code> namespaces. Prefer unique project
-identifiers
-(<code>websearch::index</code>, <code>websearch::index_util</code>)
-over collision-prone names like <code>websearch::util</code>. Also avoid overly deep nesting
-  namespaces (<a href="https://abseil.io/tips/130">TotW #130</a>).</p>
-
-<p>For <code>internal</code> namespaces, be wary of other code being
-added to the same <code>internal</code> namespace causing a collision
-(internal helpers within a team tend to be related and may lead to
-collisions). In such a situation, using the filename to make a unique
-internal name is helpful
-(<code>websearch::index::frobber_internal</code> for use
-in <code>frobber.h</code>).</p>
 
 <h3 id="Enumerator_Names">Enumerator Names</h3>
 
@@ -1052,30 +689,6 @@ in <code>frobber.h</code>).</p>
 };
 </pre>
 
-<h3 id="Exceptions_to_Naming_Rules">Exceptions to Naming Rules</h3>
-
-<p>If you are naming something that is analogous to an
-existing C or C++ entity then you can follow the existing
-naming convention scheme.</p>
-
-<dl>
-  <dt><code>bigopen()</code></dt>
-  <dd>function name, follows form of <code>open()</code></dd>
-
-  <dt><code>uint</code></dt>
-  <dd><code>typedef</code></dd>
-
-  <dt><code>bigpos</code></dt>
-  <dd><code>struct</code> or <code>class</code>, follows
-  form of <code>pos</code></dd>
-
-  <dt><code>sparse_hash_map</code></dt>
-  <dd>STL-like entity; follows STL naming conventions</dd>
-
-  <dt><code>LONGLONG_MAX</code></dt>
-  <dd>a constant, as in <code>INT_MAX</code></dd>
-</dl>
-
 <h2 id="Comments">Comments</h2>
 
 <p>Comments are absolutely vital to keeping our code readable. The following rules describe what you
@@ -1084,10 +697,8 @@ self-documenting. Giving sensible names to types and variables is much better th
 names that you must then explain through comments.</p>
 
 <p>When writing your comments, write for your audience: the
-next
-contributor who will need to
-understand your code. Be generous — the next
-one may be you!</p>
+next contributor who will need to understand your code.
+ Be generous — the next one may be you!</p>
 
 <h3 id="Comment_Style">Comment Style</h3>
 
@@ -1098,77 +709,6 @@ syntax, as long as you are consistent.</p>
 */</code> syntax; however, <code>//</code> is
 <em>much</em> more common. Be consistent with how you
 comment and what style you use where.</p>
-
-<h3 id="File_Comments">File Comments</h3>
-
-<div>
-<p>Start each file with license boilerplate.</p>
-</div>
-
-<p>File comments describe the contents of a file. If a file declares,
-implements, or tests exactly one abstraction that is documented by a comment
-at the point of declaration, file comments are not required. All other files
-must have file comments.</p>
-
-<h4>Legal Notice and Author
-Line</h4>
-
-
-
-<div>
-<p>Every file should contain license
-boilerplate. Choose the appropriate boilerplate for the
-license used by the project (for example, Apache 2.0,
-BSD, LGPL, GPL).</p>
-</div>
-
-<p>If you make significant changes to a file with an
-author line, consider deleting the author line.
-New files should usually not contain copyright notice or
-author line.</p>
-
-<h4>File Contents</h4>
-
-<p>If a <code>.h</code> declares multiple abstractions, the file-level comment
-should broadly describe the contents of the file, and how the abstractions are
-related. A 1 or 2 sentence file-level comment may be sufficient. The detailed
-documentation about individual abstractions belongs with those abstractions,
-not at the file level.</p>
-
-<p>Do not duplicate comments in both the <code>.h</code> and the
-<code>.cc</code>. Duplicated comments diverge.</p>
-
-<h3 id="Class_Comments">Class Comments</h3>
-
-<p>Every non-obvious class or struct declaration should have an
-accompanying comment that describes what it is for and how it should
-be used.</p>
-
-<pre>// Iterates over the contents of a GargantuanTable.
-// Example:
-//    std::unique_ptr&lt;GargantuanTableIterator&gt; iter = table-&gt;NewIterator();
-//    for (iter-&gt;Seek("foo"); !iter-&gt;done(); iter-&gt;Next()) {
-//      process(iter-&gt;key(), iter-&gt;value());
-//    }
-class GargantuanTableIterator {
-  ...
-};
-</pre>
-
-<p>The class comment should provide the reader with enough information to know
-how and when to use the class, as well as any additional considerations
-necessary to correctly use the class. Document the synchronization assumptions
-the class makes, if any. If an instance of the class can be accessed by
-multiple threads, take extra care to document the rules and invariants
-surrounding multithreaded use.</p>
-
-<p>The class comment is often a good place for a small example code snippet
-demonstrating a simple and focused usage of the class.</p>
-
-<p>When sufficiently separated (e.g., <code>.h</code> and <code>.cc</code>
-files), comments describing the use of the class should go together with its
-interface definition; comments about the class operation and implementation
-should accompany the implementation of the class's methods.</p>
 
 <h3 id="Function_Comments">Function Comments</h3>
 
@@ -1197,18 +737,7 @@ declaration:</p>
       are provided in `backticks`, then code-indexing
       tools may be able to present the documentation better.</li>
 
-  <li>For class member functions: whether the object remembers
-  reference or pointer arguments beyond the duration of the method
-  call. This is quite common for pointer/reference arguments to
-  constructors.</li>
-
-  <li>For each pointer argument, whether it is allowed to be null and what happens
-  if it is.</li>
-
-  <li>For each output or input/output argument, what happens to any state that argument
-    is in. (E.g. is the state appended to or overwritten?).
-
-  </li><li>If there are any performance implications of how a
+  <li>If there are any performance implications of how a
   function is used.</li>
 </ul>
 
@@ -1231,19 +760,9 @@ completely obvious.</p>
 
 <p>When documenting function overrides, focus on the
 specifics of the override itself, rather than repeating
-the comment from the overridden function.  In many of these
+the comment from the overridden function. In many of these
 cases, the override needs no additional documentation and
 thus no comment is required.</p>
-
-<p>When commenting constructors and destructors, remember
-that the person reading your code knows what constructors
-and destructors are for, so comments that just say
-something like "destroys this object" are not useful.
-Document what constructors do with their arguments (for
-example, if they take ownership of pointers), and what
-cleanup the destructor does. If this is trivial, just
-skip the comment. It is quite common for destructors not
-to have a header comment.</p>
 
 <h4>Function Definitions</h4>
 
@@ -1270,33 +789,14 @@ focus of the comments should be on how it does it.</p>
 descriptive enough to give a good idea of what the variable
 is used for. In certain cases, more comments are required.</p>
 
-<h4>Class Data Members</h4>
-
-<p>The purpose of each class data member (also called an instance
-variable or member variable) must be clear. If there are any
-invariants (special values, relationships between members, lifetime
-requirements) not clearly expressed by the type and name, they must be
-commented. However, if the type and name suffice (<code>int
-num_events_;</code>), no comment is needed.</p>
-
-<p>In particular, add comments to describe the existence and meaning
-of sentinel values, such as nullptr or -1, when they are not
-obvious. For example:</p>
-
-<pre>private:
- // Used to bounds-check table accesses. -1 means
- // that we don't yet know how many entries the table has.
- int num_total_entries_;
-</pre>
-
 <h4>Global Variables</h4>
 
-<p>All global variables should have a comment describing what they
+<p>Global variables should often have a comment describing what they
 are, what they are used for, and (if unclear) why they need to be
 global. For example:</p>
 
 <pre>// The total number of test cases that we run through in this regression test.
-const int kNumTestCases = 6;
+const NUM_TEST_CASES = 6;
 </pre>
 
 <h3 id="Implementation_Comments">Implementation Comments</h3>
@@ -1325,14 +825,11 @@ one of the following remedies:</p>
   values self-describing.</li>
 
   <li>For functions that have several configuration options, consider
-  defining a single class or struct to hold all the options
-  ,
-  and pass an instance of that.
+  defining and documenting an in-line configuration map.
   This approach has several advantages. Options are referenced by name
   at the call site, which clarifies their meaning. It also reduces
   function argument count, which makes function calls easier to read and
-  write. As an added benefit, you don't have to change call sites when
-  you add another option.
+  write. And you won't have to change call sites when you add another option.
   </li>
 
   <li>Replace large or complex nested expressions with named variables.</li>
@@ -1344,30 +841,26 @@ one of the following remedies:</p>
 Consider the following example:
 
 <pre class="badcode">// What are these arguments?
-const DecimalNumber product = CalculateProduct(values, 7, false, nullptr);
+const product = calculateProduct(values, 7, false);
 </pre>
 
 <p>versus:</p>
-
-<pre>ProductOptions options;
-options.set_precision_decimals(7);
-options.set_use_cache(ProductOptions::kDontUseCache);
-const DecimalNumber product =
-    CalculateProduct(values, options, /*completion_callback=*/nullptr);
-</pre>
+const product = calculateProduct(values, {
+  "precision" : 7,
+  "roundResult" : false
+})
 
 <h4 id="Implementation_Comment_Donts">Don'ts</h4>
 
 <p>Do not state the obvious. In particular, don't literally describe what
-code does, unless the behavior is nonobvious to a reader who understands
-C++ well. Instead, provide higher level comments that describe <i>why</i>
+code does. Instead, provide higher level comments that describe <i>why</i>
 the code does what it does, or make the code self describing.</p>
 
 Compare this:
 
 <pre class="badcode">// Find the element in the vector.  &lt;-- Bad: obvious!
 if (std::find(v.begin(), v.end(), element) != v.end()) {
-  Process(element);
+  process(element);
 }
 </pre>
 
@@ -1375,15 +868,15 @@ To this:
 
 <pre>// Process "element" unless it was already processed.
 if (std::find(v.begin(), v.end(), element) != v.end()) {
-  Process(element);
+  process(element);
 }
 </pre>
 
 Self-describing code doesn't need a comment. The comment from
 the example above would be obvious:
 
-<pre>if (!IsAlreadyProcessed(element)) {
-  Process(element);
+<pre>if (!isAlreadyProcessed(element)) {
+  process(element);
 }
 </pre>
 
@@ -1400,185 +893,51 @@ fragments. Shorter comments, such as comments at the end
 of a line of code, can sometimes be less formal, but you
 should be consistent with your style.</p>
 
-<p>Although it can be frustrating to have a code reviewer
-point out that you are using a comma when you should be
-using a semicolon, it is very important that source code
+<p> It is very important that source code
 maintain a high level of clarity and readability. Proper
 punctuation, spelling, and grammar help with that
 goal.</p>
 
-<h3 id="TODO_Comments">TODO Comments</h3>
-
-<p>Use <code>TODO</code> comments for code that is temporary,
-a short-term solution, or good-enough but not perfect.</p>
-
-<p><code>TODO</code>s should include the string
-<code>TODO</code> in all caps, followed by the
-
-name, e-mail address, bug ID, or other
-identifier
-of the person or issue with the best context
-about the problem referenced by the <code>TODO</code>. The
-main purpose is to have a consistent <code>TODO</code> that
-can be searched to find out how to get more details upon
-request. A <code>TODO</code> is not a commitment that the
-person referenced will fix the problem. Thus when you create
-a <code>TODO</code> with a name, it is almost always your
-name that is given.</p>
-
-
-
-<div>
-<pre>// TODO(kl@gmail.com): Use a "*" here for concatenation operator.
-// TODO(Zeke) change this to use relations.
-// TODO(bug 12345): remove the "Last visitors" feature.
-</pre>
-</div>
-
-<p>If your <code>TODO</code> is of the form "At a future
-date do something" make sure that you either include a
-very specific date ("Fix by November 2005") or a very
-specific event ("Remove this code when all clients can
-handle XML responses.").</p>
-
 <h2 id="Formatting">Formatting</h2>
 
 <p>Coding style and formatting are pretty arbitrary, but a
-
-project is much easier to follow
-if everyone uses the same style. Individuals may not agree with every
+project is much easier to follow if everyone uses the same style.
+ Individuals may not agree with every
 aspect of the formatting rules, and some of the rules may take
 some getting used to, but it is important that all
-
-project contributors follow the
-style rules so that
-they can all read and understand
-everyone's code easily.</p>
-
+project contributors follow the style rules so that
+they can all read and understand everyone's code easily.</p>
 
 <h3 id="Line_Length">Line Length</h3>
 
 <p>Each line of text in your code should be at most 80
 characters long.</p>
 
-<div>
-<p>We recognize that this rule is
-controversial, but so much existing code already adheres
-to it, and we feel that consistency is important.</p>
-</div>
-
-<p class="pros"></p>
-<p>Those who favor  this rule
-argue that it is rude to force them to resize
-their windows and there is no need for anything longer.
-Some folks are used to having several code windows
-side-by-side, and thus don't have room to widen their
-windows in any case. People set up their work environment
-assuming a particular maximum window width, and 80
-columns has been the traditional standard. Why change
-it?</p>
-
-<p class="cons"></p>
-<p>Proponents of change argue that a wider line can make
-code more readable. The 80-column limit is an hidebound
-throwback to 1960s mainframes;  modern equipment has wide screens that
-can easily show longer lines.</p>
-
-<p class="decision"></p>
-<p> 80 characters is the maximum.</p>
-
-<p>A line may exceed 80 characters if it is</p>
-
-<ul>
-  <li>a comment line which is not feasible to split without harming
-  readability, ease of cut and paste or auto-linking -- e.g., if a line
-  contains an example command or a literal URL longer than 80 characters.</li>
-
-  <li>a string literal that cannot easily be wrapped at 80 columns.
-  This may be because it contains URIs or other semantically-critical pieces,
-  or because the literal contains an embedded language, or a multiline
-  literal whose newlines are significant like help messages.
-  In these cases, breaking up the literal would
-  reduce readability, searchability, ability to click links, etc. Except for
-  test code, such literals should appear at namespace scope near the top of a
-  file. If a tool like Clang-Format doesn't recognize the unsplittable content,
-  <a href="https://clang.llvm.org/docs/ClangFormatStyleOptions.html#disabling-formatting-on-a-piece-of-code">
-  disable the tool</a> around the content as necessary.
-  <br><br>
-  (We must balance between usability/searchability of such literals and the
-  readability of the code around them.)
-  </li>
-
-  <li>an include statement.</li>
-
-  <li>a <a href="#The__define_Guard">header guard</a></li>
-
-  <li>a using-declaration</li>
-</ul>
-
-<h3 id="Non-ASCII_Characters">Non-ASCII Characters</h3>
-
-<p>Non-ASCII characters should be rare, and must use UTF-8
-formatting.</p>
-
-<p>You shouldn't hard-code user-facing text in source,
-even English, so use of non-ASCII characters should be
-rare. However, in certain cases it is appropriate to
-include such words in your code. For example, if your
-code parses data files from foreign sources, it may be
-appropriate to hard-code the non-ASCII string(s) used in
-those data files as delimiters. More commonly, unittest
-code (which does not  need to be localized) might
-contain non-ASCII strings. In such cases, you should use
-UTF-8, since that is  an encoding
-understood by most tools able to handle more than just
-ASCII.</p>
-
-<p>Hex encoding is also OK, and encouraged where it
-enhances readability — for example,
-<code>"\xEF\xBB\xBF"</code>, or, even more simply,
-<code>u8"\uFEFF"</code>, is the Unicode zero-width
-no-break space character, which would be invisible if
-included in the source as straight UTF-8.</p>
-
-<p>Use the <code>u8</code> prefix
-to guarantee that a string literal containing
-<code>\uXXXX</code> escape sequences is encoded as UTF-8.
-Do not use it for strings containing non-ASCII characters
-encoded as UTF-8, because that will produce incorrect
-output if the compiler does not interpret the source file
-as UTF-8. </p>
-
-<p>You shouldn't use <code>char16_t</code> and
-<code>char32_t</code> character types, since they're for
-non-UTF-8 text. For similar reasons you also shouldn't
-use <code>wchar_t</code> (unless you're writing code that
-interacts with the Windows API, which uses
-<code>wchar_t</code> extensively).</p>
-
 <h3 id="Function_Declarations_and_Definitions">Function Declarations and Definitions</h3>
 
-<p>Always type function arguments and return types. Function argument
+<!-- <p>Always type function arguments and return types with the <code>is</code> keyword. Function argument
   types should only be ommitted if the argument is allowed to be <code>undefined</code>.
-  The return type should only be ommitted if the function does not have a return value.
-Wrap parameter lists which do not fit on a single line as you would wrap arguments in a
-<a href="#Function_Calls">function call</a>.</p>
+  The return type should only be ommitted if the function does not return anything. -->
+<p>Put the entire function call on a single line. If the parameter list does not fit on a 
+  single line, wrap the parameters on following lines, or consider wrapping the parameters
+   in a map.</p>
 
 <p>Functions look like this:</p>
-<pre>functionName(parameterName1 is Type, parameterName2 is OtherType) returns SomeType
+<pre>function functionName(parameterName1 is Type, parameterName2 is OtherType) returns SomeType
 {
   doSomething();
   ...
 }
 </pre>
 
-<p>or if you cannot fit even the first parameter:</p>
+<p>If you cannot fit even the first parameter:</p>
 
-<pre>ReturnType LongClassName::ReallyReallyReallyLongFunctionName(
-    Type par_name1,  // 4 space indent
-    Type par_name2,
-    Type par_name3) {
-  DoSomething();  // 2 space indent
+<pre>function reallyReallyReallyLongFunctionName(
+    parameterName1 is Type1,
+    parameterName2 is Type2,
+    parameterName3 is Type3) returns Type4 
+{
+  doSomething();
   ...
 }
 </pre>
@@ -1591,54 +950,25 @@ Wrap parameter lists which do not fit on a single line as you would wrap argumen
   <li>If you cannot fit the return type and the function
   name on a single line, break between them.</li>
 
-  <li>If you break after the return type of a function
-  declaration or definition, do not indent.</li>
-
-  <li>The open parenthesis is always on the same line as
-  the function name.</li>
-
-  <li>There is never a space between the function name
-  and the open parenthesis.</li>
-
-  <li>There is never a space between the parentheses and
-  the parameters.</li>
-
   <li>The open curly brace is always on the start of the 
     next line of the declaration.</li>
 
   <li>The close curly brace is on the last line by itself.</li>
-
-  <li>There should be a space between the close
-  parenthesis and the open curly brace.</li>
-
-  <li>All parameters should be aligned if possible.</li>
 </ul>
 
-<h3 id="Floating_Literals">Floating-point Literals</h3>
+<h3 id="Decimal_Literals">Decimal Literals</h3>
 
-<p>Floating-point literals should always have be followed by a decimal, with digits on both
-sides, even if they use exponential notation. Readability is improved if all
-floating-point literals take this familiar form, as this helps ensure that they
-are not mistaken for integer literals.</p>
+<p>Always include a leading 0 when writing decimal literals less than 1 in order to enhance readability.</p>
 
-<pre class="badcode">float f = 1.f;
-long double ld = -.5L;
-double d = 1248e6;
-</pre>
+<pre class="badcode">var myValue = someValue + otherValue * .4;</pre>
 
-<pre class="goodcode">float f = 1.0f;
-float f2 = 1;   // Also OK
-long double ld = -0.5L;
-double d = 1248.0e6;
-</pre>
-
+<pre class="goodcode">var myValue = someValue + otherValue * 0.4;</pre>
 
 <h3 id="Function_Calls">Function Calls</h3>
 
 <p>Either write the call all on a single line, wrap the
 arguments at the parenthesis, or start the arguments on a new
-line indented by four spaces and continue at that 4 space
-indent. In the absence of other considerations, use the
+line. In the absence of other considerations, use the
 minimum number of lines, including placing multiple arguments
 on each line where appropriate.</p>
 
@@ -1651,7 +981,7 @@ should be broken up onto multiple lines, with each
 subsequent line aligned with the first argument. Do not
 add spaces after the open paren or before the close
 paren:</p>
-<pre>bool result = DoSomething(averyveryveryverylongargument1,
+<pre>bool result = doSomething(aVeryVeryVeryVeryLongArgument1,
                           argument2, argument3);
 </pre>
 
@@ -1661,7 +991,7 @@ lines with a four space indent:</p>
   ...
   ...
   if (...) {
-    bool result = DoSomething(
+    bool result = doSomething(
         argument1, argument2,  // 4 space indent
         argument3, argument4);
     ...
@@ -1695,15 +1025,6 @@ an explanatory comment:</p>
 significantly more readable on its own line, then put it on
 its own line. The decision should be specific to the argument
 which is made more readable rather than a general policy.</p>
-
-<p>Sometimes arguments form a structure that is important
-for readability. In those cases, feel free to format the
-arguments according to that structure:</p>
-<pre>// Transform the widget by a 3x3 matrix.
-my_widget.Transform(x1, x2, x3,
-                    y1, y2, y3,
-                    z1, z2, z3);
-</pre>
 
 <h3 id="Conditionals">Conditionals</h3>
 
@@ -1784,94 +1105,6 @@ if (condition)
 if (condition1 &amp;&amp;
     condition2)
   DoSomething();
-</pre>
-
-<h3 id="Loops_and_Switch_Statements">Loops and Switch Statements</h3>
-
-<p>Switch statements may use braces for blocks. Annotate
-non-trivial fall-through between cases.
-Braces are optional for single-statement loops.
-Empty loop bodies should use either empty braces or <code>continue</code>.</p>
-
-<p><code>case</code> blocks in <code>switch</code>
-statements can have curly braces or not, depending on
-your preference. If you do include curly braces they
-should be placed as shown below.</p>
-
-<p>If not conditional on an enumerated value, switch
-statements should always have a <code>default</code> case
-(in the case of an enumerated value, the compiler will
-warn you if any values are not handled). If the default
-case should never execute, treat this as an error. For example:
-
-</p>
-
-<div>
-<pre>switch (var) {
-  case 0: {  // 2 space indent
-    ...      // 4 space indent
-    break;
-  }
-  case 1: {
-    ...
-    break;
-  }
-  default: {
-    assert(false);
-  }
-}
-</pre>
-</div>
-
-<p>Fall-through from one case label to
-another must be annotated using the
-<code>[[fallthrough]];</code> attribute.
-<code>[[fallthrough]];</code> should be placed at a
-point of execution where a fall-through to the next case
-label occurs. A common exception is consecutive case
-labels without intervening code, in which case no
-annotation is needed.</p>
-
-<pre>switch (x) {
-  case 41:  // No annotation needed here.
-  case 43:
-    if (dont_be_picky) {
-      // Use this instead of or along with annotations in comments.
-      [[fallthrough]];
-    } else {
-      CloseButNoCigar();
-      break;
-    }
-  case 42:
-    DoSomethingSpecial();
-    [[fallthrough]];
-  default:
-    DoSomethingGeneric();
-    break;
-}
-</pre>
-
-<p> Braces are optional for single-statement loops.</p>
-
-<pre>for (int i = 0; i &lt; kSomeNumber; ++i)
-  printf("I love you\n");
-
-for (int i = 0; i &lt; kSomeNumber; ++i) {
-  printf("I take it back\n");
-}
-</pre>
-
-<p>Empty loop bodies should use either an empty pair of braces or
-<code>continue</code> with no braces, rather than a single semicolon.</p>
-
-<pre>while (condition) {
-  // Repeat test until it returns false.
-}
-for (int i = 0; i &lt; kSomeNumber; ++i) {}  // Good - one newline is also OK.
-while (condition) continue;  // Good - continue indicates no logic.
-</pre>
-
-<pre class="badcode">while (condition);  // Bad - looks like part of do/while loop.
 </pre>
 
 <h3 id="Pointer_and_Reference_Expressions">Pointer and Reference Expressions</h3>
